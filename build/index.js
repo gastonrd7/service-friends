@@ -28,8 +28,8 @@ const name = 'backgroundService_poster';
                 console.log('nada que leer por el momento');
                 processItem = false;
             }
-            if (processItem && ad[globalModels.advertisementFields.companyId] === null) {
-                console.log('Aun Ad sin su companyId populado');
+            else {
+                processItem = true;
             }
             //#region Post creation
             if (processItem) {
@@ -39,8 +39,10 @@ const name = 'backgroundService_poster';
                         if (platform !== "Facebook") {
                             adUpdated = yield changeStatusPlatform(ad._id, platform, "Posting");
                         }
+                        console.log(adUpdated);
                         if (adUpdated.entity !== null) {
                             let postInSocialMedia = yield createPostInSocialMedia(adUpdated, platform);
+                            console.log(postInSocialMedia);
                             switch (postInSocialMedia.status) {
                                 case "Posted":
                                     yield createPostInBD(adUpdated.entity, platform, postInSocialMedia.postPlatformId);
@@ -66,11 +68,15 @@ const name = 'backgroundService_poster';
         }
     }
 }))();
-function createPostInSocialMedia(ad, platform) {
+function createPostInSocialMedia(advertisement, platform) {
     return __awaiter(this, void 0, void 0, function* () {
-        //esta funcion va a llamar al conector de redes sociales para que haga el post
-        let postPlatformId = "http://www.facebook.com";
-        return { postPlatformId, status: "Posted" };
+        console.log('llega hasta aca');
+        var row = new influencers_service_bus_1.CreatePostRequestContent(advertisement);
+        var requestSocialMediaPost = new influencers_service_bus_1.SocialMediaRequestPayload(platform, row);
+        console.log(requestSocialMediaPost);
+        var responseSocialMedia = Object.assign(yield influencers_service_bus_1.MessagingService.request(name, yield influencers_service_bus_1.formatRequest(influencers_service_bus_1.Source.SOCIALMEDIA, influencers_service_bus_1.RequestEnum.SocialMedia_Request.CREATE_POST), requestSocialMediaPost));
+        console.log(responseSocialMedia);
+        return { status: "Posted", postPlatformId: responseSocialMedia.payload.postPlatformId };
     });
 }
 function createPostInBD(ad, platform, postPlatformId) {
@@ -138,11 +144,13 @@ function getAd() {
             yield request.init(globalModels.Model.advertisement, null, [
                 new influencers_service_bus_1.RequestWhere(influencers_service_bus_1.RequestWhereType.EQUAL, "facebookStatus", "None"),
                 new influencers_service_bus_1.RequestWhere(influencers_service_bus_1.RequestWhereType.EQUAL, "instagramStatus", "None"),
-                new influencers_service_bus_1.RequestWhere(influencers_service_bus_1.RequestWhereType.EQUAL, "twitterStatus", "None")
+                new influencers_service_bus_1.RequestWhere(influencers_service_bus_1.RequestWhereType.EQUAL, "twitterStatus", "None"),
+                new influencers_service_bus_1.RequestWhere(influencers_service_bus_1.RequestWhereType.NOTEQUAL, "companyId", null)
             ], {
                 facebookStatus: "Posting"
             }, null, null, null, null, ["creationDt"], true);
             var response = Object.assign(yield influencers_service_bus_1.MessagingService.request(name, yield influencers_service_bus_1.formatRequest(influencers_service_bus_1.Source.STORAGE, influencers_service_bus_1.RequestEnum.DataStorage_Request.FIND_ONE_AND_UPDATE), request));
+            console.log(response);
             return response.entity;
         }
         catch (error) {

@@ -8,15 +8,17 @@ import { MessagingService,
     RequestWhere,
 SocialMediaRequestPayload, 
 SocialMediaRequestResponse, 
-ReadPostRequestContent} from 'influencers-service-bus';
+ReadPostRequestContent,
+CreatePostRequestContent,
+CreatePostResponseContent} from 'influencers-service-bus';
 import * as globalModels from 'influencers-models';
 import 'dotenv/config';
-
 
 var init = false;
 var run = true;
 var processItem = true;
 const name = 'backgroundService_poster';
+
 
 (async () => {
     while(run) {
@@ -24,7 +26,6 @@ const name = 'backgroundService_poster';
             await MessagingService.init();
             init = true;
         }
-        
         try
         {
             //Lectura del ad pendiente de crear sus post         
@@ -32,10 +33,7 @@ const name = 'backgroundService_poster';
             if (ad === null) {
                 console.log('nada que leer por el momento');
                 processItem = false;
-            }
-            if (processItem && ad[globalModels.advertisementFields.companyId] === null) {
-                console.log('Aun Ad sin su companyId populado');
-            }
+            } else { processItem = true;}
 
             //#region Post creation
             if (processItem) {
@@ -46,10 +44,11 @@ const name = 'backgroundService_poster';
                         if(platform !== "Facebook") {
                             adUpdated = await changeStatusPlatform(ad._id, platform, "Posting");
                         }
-    
+                        
+                        console.log(adUpdated);
                         if (adUpdated.entity !== null) {
                             let postInSocialMedia = await createPostInSocialMedia(adUpdated, platform);
-                            
+                            console.log(postInSocialMedia);
                             switch (postInSocialMedia.status) {
                                 case "Posted":
                                     await createPostInBD(adUpdated.entity, platform, postInSocialMedia.postPlatformId);
@@ -82,10 +81,18 @@ const name = 'backgroundService_poster';
 })();
 
 
-async function createPostInSocialMedia(ad, platform) {
-    //esta funcion va a llamar al conector de redes sociales para que haga el post
-    let postPlatformId = "http://www.facebook.com";
-    return {postPlatformId, status: "Posted"};
+async function createPostInSocialMedia(advertisement, platform) {
+    console.log('llega hasta aca');
+    var row = new CreatePostRequestContent(advertisement);
+
+    var requestSocialMediaPost = new SocialMediaRequestPayload(platform, row);
+
+    console.log(requestSocialMediaPost);
+    var responseSocialMedia : SocialMediaRequestResponse = Object.assign(await MessagingService.request(name, await formatRequest(Source.SOCIALMEDIA, RequestEnum.SocialMedia_Request.CREATE_POST), requestSocialMediaPost));
+    console.log(responseSocialMedia);
+
+    return  {status: "Posted", postPlatformId: (responseSocialMedia.payload as CreatePostResponseContent).postPlatformId};
+
 }
 
 async function createPostInBD(ad, platform, postPlatformId) {
@@ -156,14 +163,15 @@ async function getAd() {
         [
             new RequestWhere(RequestWhereType.EQUAL, "facebookStatus", "None"),
             new RequestWhere(RequestWhereType.EQUAL, "instagramStatus", "None"),
-            new RequestWhere(RequestWhereType.EQUAL, "twitterStatus", "None")
+            new RequestWhere(RequestWhereType.EQUAL, "twitterStatus", "None"),
+            new RequestWhere(RequestWhereType.NOTEQUAL , "companyId", null)
         ],
         {
             facebookStatus: "Posting"
         }, 
         null, null, null, null, ["creationDt"], true);
-
         var response : RequestResponse = Object.assign(await MessagingService.request(name, await formatRequest(Source.STORAGE, RequestEnum.DataStorage_Request.FIND_ONE_AND_UPDATE), request));
+        console.log(response);
         return response.entity;
     } catch (error) {
         console.log(error);
