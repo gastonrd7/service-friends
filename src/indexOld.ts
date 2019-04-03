@@ -7,9 +7,8 @@ import { MessagingService,
     RequestWhereType,
     RequestWhere,
 SocialMediaRequestPayload, 
-SocialMediaRequestResponse,
-RelationshipPostRequestContent,
-RelationshipPostResponseContent,
+SocialMediaRequestResponse, 
+ReadPostRequestContent,
 CreatePostRequestContent,
 CreatePostResponseContent} from 'influencers-service-bus';
 import * as globalModels from 'influencers-models';
@@ -30,19 +29,47 @@ const name = 'backgroundService_poster';
         try
         {
             //Lectura del ad pendiente de crear sus post         
-            let personCredential = await getPersonCredential();
-            if (personCredential === null) {
+            let ad = await getAd();
+            if (ad === null) {
                 console.log('nada que leer por el momento');
                 processItem = false;
             } else { processItem = true;}
 
-            //#region Procesamiento del item
+            //#region Post creation
             if (processItem) {
-                //#region Solicito al conector que traiga los amigos de este sujeto
-                let friends = await getFriends(personCredential);
-                console.log(friends);
-                //#endregion
+                ad[globalModels.advertisementFields.socialMediaTarget].forEach(async (platform) => {
+                
+                    if (!await verifyExist(ad._id, platform)) {
+                        let adUpdated = {entity: ad, ok: true, detail: null};
+                        if(platform !== "Facebook") {
+                            adUpdated = await changeStatusPlatform(ad._id, platform, "Posting");
+                        }
+                        
+                        console.log(adUpdated);
+                        if (adUpdated.entity !== null) {
+                            let postInSocialMedia = await createPostInSocialMedia(adUpdated, platform);
+                            console.log(postInSocialMedia);
+                            switch (postInSocialMedia.status) {
+                                case "Posted":
+                                    await createPostInBD(adUpdated.entity, platform, postInSocialMedia.postPlatformId);
+                                    await changeStatusPlatform(ad._id, platform, "Posted");
+                                break;
+                                case "Failed":
+                                    await changeStatusPlatform(adUpdated.entity._id, platform, "Failed"); 
+                                break;
+                                case "Removed":
+                                    await changeStatusPlatform(adUpdated.entity._id, platform, "Removed"); 
+                                break;
+                                default:
+                                    break;
+                            }
+                        }
+                    }
+                    
+                 });
             }
+            
+            
         }
         catch (err)
         {
@@ -53,41 +80,9 @@ const name = 'backgroundService_poster';
 
 })();
 
-async function getFriends(personCredential) {
-    var row = new RelationshipPostRequestContent(personCredential);
-
-    var requestRelationship = new SocialMediaRequestPayload(personCredential.platform, row);
-
-    console.log(requestRelationship);
-    var responseRelationship : SocialMediaRequestResponse = Object.assign(await MessagingService.request(name, await formatRequest(Source.SOCIALMEDIA, RequestEnum.SocialMedia_Request.READ_RELATIONSHIP), requestRelationship));
-    console.log(responseRelationship);
-
-    return  (responseRelationship.payload as RelationshipPostResponseContent).platformObjectIdentities;
-}
-
-async function getPersonCredential() {
-    try {
-        var request = new RequestPayload();
-        await request.init(globalModels.Model.person_credential, null, 
-        [
-            new RequestWhere(RequestWhereType.LESSOREQUALTHAN, globalModels.person_credentialFields.friendsFeedDt,  await (Date.now() - (60 * 1000))),
-            new RequestWhere(RequestWhereType.EQUAL, globalModels.person_credentialFields.friendsFeedStatus, globalModels.person_credential_fiendsFeedStatusEnum.Idle),
-            new RequestWhere(RequestWhereType.NOTEQUAL , globalModels.person_credentialFields.personId, null)
-        ],
-        {
-            [globalModels.person_credentialFields.friendsFeedStatus]: globalModels.person_credential_fiendsFeedStatusEnum.Fetching
-        }, 
-        null, null, null, null, [globalModels.person_credentialFields.creationDt], true);
-        var response : RequestResponse = Object.assign(await MessagingService.request(name, await formatRequest(Source.STORAGE, RequestEnum.DataStorage_Request.FIND_ONE_AND_UPDATE), request));
-        console.log(response);
-        return response.entity;
-    } catch (error) {
-        console.log(error);
-        return null;
-    }
-}
 
 async function createPostInSocialMedia(advertisement, platform) {
+    console.log('llega hasta aca');
     var row = new CreatePostRequestContent(advertisement);
 
     var requestSocialMediaPost = new SocialMediaRequestPayload(platform, row);
@@ -159,6 +154,29 @@ async function verifyExist(adId, platform) {
     var response : RequestResponse = Object.assign(await MessagingService.request(name, await formatRequest(Source.STORAGE, RequestEnum.DataStorage_Request.READ_COUNT), request));
     if (response.count && response.count > 0) return true;
     else return false;
+}
+
+async function getAd() {
+    try {
+        var request = new RequestPayload();
+        await request.init(globalModels.Model.advertisement, null, 
+        [
+            new RequestWhere(RequestWhereType.EQUAL, "facebookStatus", "None"),
+            new RequestWhere(RequestWhereType.EQUAL, "instagramStatus", "None"),
+            new RequestWhere(RequestWhereType.EQUAL, "twitterStatus", "None"),
+            new RequestWhere(RequestWhereType.NOTEQUAL , "companyId", null)
+        ],
+        {
+            facebookStatus: "Posting"
+        }, 
+        null, null, null, null, ["creationDt"], true);
+        var response : RequestResponse = Object.assign(await MessagingService.request(name, await formatRequest(Source.STORAGE, RequestEnum.DataStorage_Request.FIND_ONE_AND_UPDATE), request));
+        console.log(response);
+        return response.entity;
+    } catch (error) {
+        console.log(error);
+        return null;
+    }
 }
 
 
