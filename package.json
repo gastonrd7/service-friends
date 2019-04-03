@@ -1,5 +1,5 @@
 {
-  "name": "service-poster",
+  "name": "service-friends",
   "version": "1.0.0",
   "description": "Servicio posteador",
   "main": "index.js",
@@ -29,7 +29,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/gastonrd7/service-poster.git"
+    "url": "git+https://github.com/gastonrd7/service-friends.git"
   },
   "author": "RuizDiaz",
   "license": "MIT",
