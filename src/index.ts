@@ -39,7 +39,7 @@ const relationship = {
             if (personCredential === null) {
                 console.log('nada que leer por el momento');
                 processItem = false;
-                run = false;
+                //run = false;
             } else { processItem = true;}
 
             //#region Procesamiento del item
