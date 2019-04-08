@@ -14,6 +14,8 @@ RelationshipPostResponseContent,
 import * as globalModels from 'influencers-models';
 import * as lodash from 'lodash';
 import 'dotenv/config';
+import * as dotenv from "dotenv";
+dotenv.config();
 
 var init = false;
 var run = true;
@@ -37,7 +39,7 @@ const relationship = {
             //Lectura del ad pendiente de crear sus post         
             let personCredential = await getPersonCredential();
             if (personCredential === null) {
-                console.log('nada que leer por el momento');
+                console.log('nothing to read at the moment');
                 processItem = false;
                 //run = false;
             } else { processItem = true;}
@@ -247,7 +249,7 @@ async function getPersonCredential() {
         var request = new RequestPayload();
         await request.init(globalModels.Model.person_credential, null, 
         [
-            new RequestWhere(RequestWhereType.LESSOREQUALTHAN, globalModels.person_credentialFields.friendsFeedDt,  await (Date.now() - 5 * (60 * 1000))),
+            new RequestWhere(RequestWhereType.LESSOREQUALTHAN, globalModels.person_credentialFields.friendsFeedDt,  await (Date.now() - parseInt(process.env.FREQUENCY_OF_EXECUTION))),
             new RequestWhere(RequestWhereType.EQUAL, globalModels.person_credentialFields.friendsFeedStatus, globalModels.person_credential_fiendsFeedStatusEnum.Idle),
             new RequestWhere(RequestWhereType.NOTEQUAL , globalModels.person_credentialFields.personId, null)
         ],
